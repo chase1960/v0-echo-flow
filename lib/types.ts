@@ -38,4 +38,14 @@ export interface Note {
   content: string;
   timestamp?: number;
   createdAt: number;
+  type?: "custom" | "chat" | "transcript" | "takeaway";
+}
+
+export interface VideoNoteGroup {
+  videoId: string;
+  videoTitle: string;
+  channelName: string;
+  thumbnailUrl: string;
+  duration: number;
+  notes: Note[];
 }

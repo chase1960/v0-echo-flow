@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Video, Sparkles, FileText, Settings, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -16,9 +17,9 @@ export function Header() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm">
       <div className="flex items-center justify-between px-4 md:px-6 py-4">
         {/* Logo */}
-        <div className="flex items-center">
+        <Link href="/" className="flex items-center">
           <Video className="size-6 text-foreground" strokeWidth={1.5} />
-        </div>
+        </Link>
 
         {/* User Menu */}
         <DropdownMenu>
@@ -45,13 +46,17 @@ export function Header() {
               <Sparkles className="size-4" />
               <span>Upgrade Plan</span>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Video className="size-4" />
-              <span>Videos</span>
+            <DropdownMenuItem asChild>
+              <Link href="/">
+                <Video className="size-4" />
+                <span>Videos</span>
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <FileText className="size-4" />
-              <span>Notes</span>
+            <DropdownMenuItem asChild>
+              <Link href="/notes">
+                <FileText className="size-4" />
+                <span>Notes</span>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Settings className="size-4" />
