@@ -8,7 +8,7 @@ import { HighlightsList } from "./highlights-list";
 import { TranscriptTab } from "./transcript-tab";
 import { ChatTab } from "./chat-tab";
 import { NotesTab } from "./notes-tab";
-import { FileText, MessageSquare, StickyNote } from "lucide-react";
+import { Sparkles, MessageSquare, PenLine, ChevronDown } from "lucide-react";
 
 interface VideoContentProps {
   data: VideoAnalysis;
@@ -46,15 +46,15 @@ export function VideoContent({ data }: VideoContentProps) {
   )?.[1] || "default";
 
   const tabs = [
-    { id: "transcript" as const, label: "Transcript", icon: FileText },
-    { id: "chat" as const, label: "Chat", icon: MessageSquare },
-    { id: "notes" as const, label: "Notes", icon: StickyNote },
+    { id: "transcript" as const, label: "Transcript", icon: Sparkles, hasDropdown: true },
+    { id: "chat" as const, label: "Chat", icon: MessageSquare, hasDropdown: false },
+    { id: "notes" as const, label: "Notes", icon: PenLine, hasDropdown: false },
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-5rem)]">
+    <div className="flex flex-col lg:flex-row gap-0 h-[calc(100vh-4rem)]">
       {/* Left Side - Video Area (60%) */}
-      <div className="w-full lg:w-[60%] flex flex-col gap-4 overflow-hidden">
+      <div className="w-full lg:w-[60%] flex flex-col p-4 lg:p-6 overflow-hidden">
         {/* Video Player */}
         <VideoPlayer
           ref={playerRef}
@@ -62,15 +62,17 @@ export function VideoContent({ data }: VideoContentProps) {
           title={data.title}
         />
 
-        {/* Highlight Timeline */}
-        <HighlightTimeline
-          highlights={data.highlights}
-          totalDuration={totalDuration}
-          onSeek={handleSeek}
-        />
+        {/* Highlight Timeline Bar */}
+        <div className="mt-4">
+          <HighlightTimeline
+            highlights={data.highlights}
+            totalDuration={totalDuration}
+            onSeek={handleSeek}
+          />
+        </div>
 
         {/* Highlights List */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 overflow-y-auto mt-3 min-h-0">
           <HighlightsList
             highlights={data.highlights}
             onSeek={handleSeek}
@@ -80,27 +82,30 @@ export function VideoContent({ data }: VideoContentProps) {
       </div>
 
       {/* Right Side - Info Area (40%) */}
-      <div className="w-full lg:w-[40%] flex flex-col min-h-0">
-        {/* Tab Navigation */}
-        <div className="flex gap-1 p-1 bg-muted rounded-xl mb-4">
+      <div className="w-full lg:w-[40%] flex flex-col border-l border-border min-h-0">
+        {/* Tab Navigation - 椭圆边框样式 */}
+        <div className="flex items-center gap-1 p-4 pb-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-all ${
                 activeTab === tab.id
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "text-foreground border border-border rounded-full bg-background"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <tab.icon className="size-4" />
-              <span className="hidden sm:inline">{tab.label}</span>
+              <span>{tab.label}</span>
+              {tab.hasDropdown && activeTab === tab.id && (
+                <ChevronDown className="size-3.5 ml-0.5" />
+              )}
             </button>
           ))}
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 bg-card border border-border rounded-xl p-4 overflow-hidden">
+        <div className="flex-1 p-4 overflow-hidden">
           {activeTab === "transcript" && (
             <TranscriptTab transcript={data.transcript} onSeek={handleSeek} />
           )}

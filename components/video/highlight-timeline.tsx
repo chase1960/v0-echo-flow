@@ -8,51 +8,54 @@ interface HighlightTimelineProps {
   onSeek: (time: number) => void;
 }
 
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
+// 定义彩色段的颜色
+const segmentColors = [
+  "#FCA5A5", // 浅红/珊瑚色
+  "#93C5FD", // 浅蓝色
+  "#A5B4FC", // 浅紫色
+  "#F9A8D4", // 浅粉色
+];
 
 export function HighlightTimeline({
   highlights,
   totalDuration,
   onSeek,
 }: HighlightTimelineProps) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-4">
-      <h3 className="text-sm font-medium text-foreground mb-3">
-        Key Moments
-      </h3>
-      
-      {/* Timeline Bar */}
-      <div className="relative">
-        {/* Background Bar */}
-        <div className="h-2 bg-muted rounded-full relative">
-          {/* Highlight Dots */}
-          {highlights.map((highlight) => {
-            const position = (highlight.time / totalDuration) * 100;
-            return (
-              <button
-                key={highlight.id}
-                onClick={() => onSeek(highlight.time)}
-                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-4 rounded-full border-2 border-background shadow-md hover:scale-125 transition-transform cursor-pointer z-10"
-                style={{
-                  left: `${position}%`,
-                  backgroundColor: highlight.color,
-                }}
-                title={`${formatTime(highlight.time)} - ${highlight.title}`}
-              />
-            );
-          })}
-        </div>
+  // 根据 highlights 创建时间段
+  const segments = highlights.map((highlight, index) => {
+    const startPercent = (highlight.time / totalDuration) * 100;
+    const nextHighlight = highlights[index + 1];
+    const endTime = nextHighlight ? nextHighlight.time : highlight.time + 60;
+    const endPercent = Math.min((endTime / totalDuration) * 100, 100);
+    const widthPercent = endPercent - startPercent;
 
-        {/* Time Labels */}
-        <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-          <span>0:00</span>
-          <span>{formatTime(totalDuration)}</span>
-        </div>
-      </div>
+    return {
+      id: highlight.id,
+      startPercent,
+      widthPercent,
+      color: segmentColors[index % segmentColors.length],
+      time: highlight.time,
+    };
+  });
+
+  return (
+    <div className="relative h-6 bg-muted/30 rounded-full overflow-hidden flex items-center px-1">
+      {/* 背景轨道 */}
+      <div className="absolute inset-x-1 h-3 bg-muted/50 rounded-full" />
+      
+      {/* 彩色段落 */}
+      {segments.map((segment) => (
+        <button
+          key={segment.id}
+          onClick={() => onSeek(segment.time)}
+          className="absolute h-3 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+          style={{
+            left: `${segment.startPercent}%`,
+            width: `${Math.max(segment.widthPercent, 3)}%`,
+            backgroundColor: segment.color,
+          }}
+        />
+      ))}
     </div>
   );
 }

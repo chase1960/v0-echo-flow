@@ -49,20 +49,15 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
     }
 
     return (
-      <div className="space-y-3">
-        <div className="aspect-video bg-muted rounded-xl overflow-hidden">
-          <iframe
-            ref={iframeRef}
-            src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1`}
-            className="w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title={title}
-          />
-        </div>
-        <h1 className="text-lg font-medium text-foreground line-clamp-2">
-          {title}
-        </h1>
+      <div className="aspect-video bg-muted rounded-xl overflow-hidden shadow-lg">
+        <iframe
+          ref={iframeRef}
+          src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1`}
+          className="w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title={title}
+        />
       </div>
     );
   }
