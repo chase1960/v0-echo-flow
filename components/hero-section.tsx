@@ -19,8 +19,8 @@ export function HeroSection() {
     // Simulate analysis delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Navigate to analysis page with the URL
-    router.push(`/analyze?url=${encodeURIComponent(url)}`);
+    // Navigate to video analysis page with the URL
+    router.push(`/video?url=${encodeURIComponent(url)}`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
