@@ -49,3 +49,16 @@ export interface VideoNoteGroup {
   duration: number;
   notes: Note[];
 }
+
+export interface VideoHistoryItem {
+  id: string;
+  videoId: string;
+  videoUrl: string;
+  title: string;
+  channelName: string;
+  thumbnailUrl: string;
+  duration: number;
+  watchedAt: number;
+  highlightsCount: number;
+  isFavorite: boolean;
+}

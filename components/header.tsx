@@ -47,7 +47,7 @@ export function Header() {
               <span>Upgrade Plan</span>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/">
+              <Link href="/videos">
                 <Video className="size-4" />
                 <span>Videos</span>
               </Link>
