@@ -14,8 +14,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'LongCut - The best way to learn from long videos',
-  description: 'LongCut helps you learn from long videos by showing you where to look. Find the highlights. Take notes. Ask questions.',
+  title: 'EchoFlow - The best way to learn from long videos',
+  description: 'EchoFlow helps you learn from long videos by showing you where to look. Find the highlights. Take notes. Ask questions.',
   generator: 'v0.app',
   icons: {
     icon: [

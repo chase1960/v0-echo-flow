@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Link2, Sparkles, ArrowUp } from "lucide-react";
+import { Link2, ArrowUp } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -30,16 +30,11 @@ export function HeroSection() {
     }
   };
 
-  const handleLucky = () => {
-    // Set a demo YouTube URL
-    setUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  };
-
   return (
     <div className="flex flex-col items-center justify-center px-4">
       {/* Title */}
       <h1 className="font-serif text-4xl md:text-5xl text-foreground mb-3 tracking-tight">
-        LongCut
+        EchoFlow
       </h1>
 
       {/* Subtitle */}
@@ -65,16 +60,7 @@ export function HeroSection() {
           </div>
 
           {/* Action Row */}
-          <div className="flex items-center justify-end gap-3 mt-4">
-            <button
-              onClick={handleLucky}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-accent disabled:opacity-50"
-            >
-              <Sparkles className="size-4" />
-              {"I'm feeling lucky"}
-            </button>
-
+          <div className="flex items-center justify-end mt-4">
             <button
               onClick={handleSubmit}
               disabled={isLoading || !url.trim()}

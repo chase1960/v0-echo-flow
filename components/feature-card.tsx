@@ -14,7 +14,7 @@ export function FeatureCard() {
             {"Don't take the shortcut."}
           </h3>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            {"LongCut doesn't summarize. We show you where to look instead. Find the highlights. Take notes. Ask questions."}
+            {"EchoFlow doesn't summarize. We show you where to look instead. Find the highlights. Take notes. Ask questions."}
           </p>
         </div>
       </div>
