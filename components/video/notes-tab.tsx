@@ -1,158 +1,174 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Note } from "@/lib/types";
+import { useCallback, useEffect, useState } from "react";
+import type { Note } from "@/lib/types";
+import { formatTime } from "@/lib/youtube";
+import { readGroups, removeNote, upsertNote } from "@/lib/storage";
 import { Plus, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface NotesTabProps {
   videoId: string;
-  pendingNote?: string;
-  onNoteClear?: () => void;
+  videoTitle: string;
+  channelName: string;
+  duration: number;
+  currentTime: number;
+  onSeek: (seconds: number) => void;
+  /** a note request coming from an anchor card */
+  pending?: { at: number; text: string } | null;
+  onPendingUsed?: () => void;
 }
 
-export function NotesTab({ videoId, pendingNote, onNoteClear }: NotesTabProps) {
+/**
+ * Notes carry a timestamp by default, so they are actionable later rather than
+ * a wall of text you cannot place. This list reads and writes the same store the
+ * notes page uses, which is what makes notes taken while watching show up there.
+ */
+export function NotesTab({
+  videoId,
+  videoTitle,
+  channelName,
+  duration,
+  currentTime,
+  onSeek,
+  pending,
+  onPendingUsed,
+}: NotesTabProps) {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [isAdding, setIsAdding] = useState(false);
-  const [input, setInput] = useState("");
+  const [draft, setDraft] = useState("");
+  const [at, setAt] = useState(currentTime);
+  const [composing, setComposing] = useState(false);
 
-  // Load notes from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem(`notes-${videoId}`);
-    if (saved) {
-      setNotes(JSON.parse(saved));
-    }
+  const refresh = useCallback(() => {
+    const group = readGroups().find((item) => item.videoId === videoId);
+    setNotes(group?.notes ?? []);
   }, [videoId]);
 
-  // Save notes to localStorage
   useEffect(() => {
-    localStorage.setItem(`notes-${videoId}`, JSON.stringify(notes));
-  }, [notes, videoId]);
+    refresh();
+  }, [refresh]);
 
-  // Handle pending note from highlights
   useEffect(() => {
-    if (pendingNote) {
-      setInput(pendingNote);
-      setIsAdding(true);
-      onNoteClear?.();
-    }
-  }, [pendingNote, onNoteClear]);
+    if (!pending) return;
+    setDraft(pending.text);
+    setAt(pending.at);
+    setComposing(true);
+    onPendingUsed?.();
+  }, [pending, onPendingUsed]);
 
-  const handleAddNote = () => {
-    if (!input.trim()) return;
-
-    const newNote: Note = {
-      id: `note-${Date.now()}`,
-      content: input.trim(),
-      createdAt: Date.now(),
-    };
-
-    setNotes((prev) => [newNote, ...prev]);
-    setInput("");
-    setIsAdding(false);
-  };
-
-  const handleDeleteNote = (id: string) => {
-    setNotes((prev) => prev.filter((note) => note.id !== id));
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleAddNote();
-    }
-    if (e.key === "Escape") {
-      setIsAdding(false);
-      setInput("");
-    }
-  };
+  function save() {
+    const content = draft.trim();
+    if (!content) return;
+    upsertNote(
+      { videoId, videoTitle, channelName, duration },
+      {
+        id: `note-${Date.now()}`,
+        content,
+        at,
+        createdAt: Date.now(),
+        type: "custom",
+      },
+    );
+    setDraft("");
+    setComposing(false);
+    refresh();
+  }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Notes Content */}
-      <div className="flex-1 overflow-y-auto">
-        {notes.length === 0 && !isAdding ? (
-          /* Empty State */
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <p className="text-sm text-muted-foreground mb-6 max-w-[280px] leading-relaxed">
-              Your saved notes will appear here. Highlight transcript or chat text to take a note.
-            </p>
-            <button
-              onClick={() => setIsAdding(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-border rounded-full text-sm text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-            >
-              <Plus className="size-4" />
-              Add a note
-            </button>
-          </div>
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+        {notes.length === 0 && !composing ? (
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            Nothing yet. Notes you take here are pinned to a timestamp and appear on the notes
+            page too.
+          </p>
         ) : (
-          <div className="space-y-3">
-            {/* Add Note Input */}
-            {isAdding && (
-              <div className="p-3 border border-border rounded-xl bg-muted/30">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Write your note..."
-                  rows={3}
-                  autoFocus
-                  className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none"
-                />
-                <div className="flex justify-end gap-2 mt-2">
+          notes.map((note) => (
+            <div
+              key={note.id}
+              className="group rounded-lg border border-border p-2.5 transition-colors hover:bg-muted/25"
+            >
+              <div className="flex items-start gap-2">
+                {typeof note.at === "number" ? (
                   <button
-                    onClick={() => {
-                      setIsAdding(false);
-                      setInput("");
-                    }}
-                    className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    type="button"
+                    onClick={() => onSeek(note.at as number)}
+                    className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] tabular-nums text-foreground hover:bg-accent"
                   >
-                    Cancel
+                    {formatTime(note.at)}
                   </button>
-                  <button
-                    onClick={handleAddNote}
-                    disabled={!input.trim()}
-                    className="px-3 py-1.5 text-xs bg-foreground text-background rounded-lg disabled:opacity-50 hover:bg-foreground/90 transition-colors"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Notes List */}
-            {notes.map((note) => (
-              <div
-                key={note.id}
-                className="group p-3 border border-border rounded-xl relative hover:bg-muted/30 transition-colors"
-              >
-                <p className="text-sm text-foreground whitespace-pre-wrap pr-8">
+                ) : (
+                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                    general
+                  </span>
+                )}
+                <p className="min-w-0 flex-1 whitespace-pre-wrap text-[13px] leading-relaxed">
                   {note.content}
                 </p>
-                <span className="text-xs text-muted-foreground mt-2 block">
-                  {new Date(note.createdAt).toLocaleString()}
-                </span>
                 <button
-                  onClick={() => handleDeleteNote(note.id)}
-                  className="absolute top-3 right-3 p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                  type="button"
+                  onClick={() => {
+                    removeNote(videoId, note.id);
+                    refresh();
+                  }}
+                  className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                  aria-label="Delete note"
                 >
                   <Trash2 className="size-3.5" />
                 </button>
               </div>
-            ))}
-
-            {/* Add More Button */}
-            {!isAdding && notes.length > 0 && (
-              <button
-                onClick={() => setIsAdding(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-border rounded-xl text-sm text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-              >
-                <Plus className="size-4" />
-                Add another note
-              </button>
-            )}
-          </div>
+            </div>
+          ))
         )}
       </div>
+
+      {composing ? (
+        <div className="mt-2 border-t border-border pt-2">
+          <div className="mb-1.5 text-[11px] text-muted-foreground tabular-nums">
+            Note at {formatTime(at)}
+          </div>
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            rows={3}
+            className="w-full resize-none rounded-lg border border-border bg-background p-2 text-[13px] outline-none focus:ring-1 focus:ring-foreground/20"
+            placeholder="What do you want to remember about this moment?"
+          />
+          <div className="mt-1.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={!draft.trim()}
+              className="rounded-full bg-foreground px-3 py-1 text-[11px] font-medium text-background disabled:opacity-40"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setComposing(false);
+                setDraft("");
+              }}
+              className={cn("rounded-full px-3 py-1 text-[11px] text-muted-foreground hover:text-foreground")}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setAt(currentTime);
+            setComposing(true);
+          }}
+          className="mt-2 flex items-center justify-center gap-1.5 rounded-full border border-border py-1.5 text-[11px] text-muted-foreground transition hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="size-3" />
+          Note at {formatTime(currentTime)}
+        </button>
+      )}
     </div>
   );
 }

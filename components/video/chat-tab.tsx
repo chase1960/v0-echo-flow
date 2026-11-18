@@ -1,156 +1,169 @@
 "use client";
 
 import { useState } from "react";
-import { Question, ChatMessage } from "@/lib/types";
-import { Send, Sparkles } from "lucide-react";
+import type { Anchor, ChatMessage, Citation } from "@/lib/types";
+import { formatTime } from "@/lib/youtube";
+import { Send, ShieldQuestion } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { cn } from "@/lib/utils";
 
 interface ChatTabProps {
-  questions: Question[];
+  videoId: string;
+  videoUrl: string;
+  anchors: Anchor[];
+  onSeek: (seconds: number) => void;
 }
 
-// 预设问题
-const presetQuestions = [
-  "What are the key takeaways?",
-  "What are the juciest quotes?",
-];
+interface ChatResponse {
+  answer?: string;
+  grounded?: boolean;
+  citations?: Citation[];
+  nearby?: string[];
+  error?: string;
+}
 
-// 详细问题卡片
-const detailedQuestions = [
-  "What is the historical price of gold in dollars per ounce?",
-  "How has the volume of gold purchased by central banks changed since 2022?",
-  "Why do central banks want to diversify their reserves away from dollars?",
-];
-
-export function ChatTab({ questions }: ChatTabProps) {
+/**
+ * Ask about the video.
+ *
+ * The answer is only allowed to stand on retrieved excerpts, and every excerpt
+ * it used comes back as a citation chip that jumps to the moment. When nothing
+ * matches, the UI says so plainly and offers the nearest real topics instead of
+ * filling the gap with plausible text.
+ */
+export function ChatTab({ videoId, videoUrl, anchors, onSeek }: ChatTabProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [cheatsheetCount, setCheatsheetCount] = useState(1);
+  const [loading, setLoading] = useState(false);
 
-  const handleQuestionClick = async (questionText: string) => {
-    // 查找预设答案
-    const preset = questions.find(q => q.question === questionText);
-    
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: questionText,
-    };
+  const suggestions = [
+    "What are the key takeaways?",
+    ...anchors
+      .slice(0, 2)
+      .map((anchor) => `What does the video say at ${formatTime(anchor.start)}?`),
+  ];
 
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    const aiMessage: ChatMessage = {
-      id: `ai-${Date.now()}`,
-      role: "assistant",
-      content: preset?.answer || "Based on the video content, I can provide insights about this topic. The video discusses various aspects related to your question, highlighting key points and providing detailed explanations.",
-    };
-
-    setMessages((prev) => [...prev, aiMessage]);
-    setIsLoading(false);
-  };
-
-  const handleGenerateCheatsheet = () => {
-    if (cheatsheetCount > 0) {
-      setCheatsheetCount(prev => prev - 1);
-      // 这里可以添加生成 cheatsheet 的逻辑
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: input.trim(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+  async function ask(question: string) {
+    if (!question.trim() || loading) return;
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-${Date.now()}`, role: "user", content: question.trim() },
+    ]);
     setInput("");
-    setIsLoading(true);
+    setLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ videoId, question: question.trim(), url: videoUrl }),
+      });
+      const data = (await response.json()) as ChatResponse;
 
-    const aiMessage: ChatMessage = {
-      id: `ai-${Date.now()}`,
-      role: "assistant",
-      content: "Based on the video content, I can provide more details about this topic. The analysis shows important insights that help understand the key concepts discussed in the video.",
-    };
-
-    setMessages((prev) => [...prev, aiMessage]);
-    setIsLoading(false);
-  };
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: data.answer ?? data.error ?? "The request failed.",
+          citations: data.citations ?? [],
+          grounded: data.grounded ?? false,
+        },
+      ]);
+      if (data.nearby && data.nearby.length > 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `n-${Date.now()}`,
+            role: "assistant",
+            content: `Nearest real topics: ${data.nearby.join(" · ")}`,
+            grounded: true,
+          },
+        ]);
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `e-${Date.now()}`,
+          role: "assistant",
+          content: "Network request failed.",
+          grounded: false,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto pr-2">
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto pr-1">
         {messages.length === 0 ? (
-          <div className="space-y-4">
-            {/* Generate Cheatsheet Button */}
-            <button
-              onClick={handleGenerateCheatsheet}
-              disabled={cheatsheetCount === 0}
-              className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-full text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
-            >
-              <Sparkles className="size-4" />
-              Generate cheatsheet image ({cheatsheetCount} left)
-            </button>
-
-            {/* Preset Questions - Pills */}
-            <div className="flex flex-wrap gap-2">
-              {presetQuestions.map((q, index) => (
+          <div className="space-y-3">
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              Answers are built only from this video&apos;s own passages, and every claim comes
+              back as a timestamp you can jump to. If the video does not cover it, you get a
+              refusal rather than a guess.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {suggestions.map((suggestion) => (
                 <button
-                  key={index}
-                  onClick={() => handleQuestionClick(q)}
-                  className="px-4 py-2 border border-border rounded-full text-sm hover:bg-accent transition-colors"
+                  key={suggestion}
+                  type="button"
+                  onClick={() => void ask(suggestion)}
+                  className="rounded-full border border-border px-3 py-1.5 text-xs transition hover:bg-accent"
                 >
-                  {q}
-                </button>
-              ))}
-            </div>
-
-            {/* Detailed Question Cards */}
-            <div className="space-y-2 pt-2">
-              {detailedQuestions.map((q, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuestionClick(q)}
-                  className="w-full text-left px-4 py-3 border border-border rounded-xl text-sm hover:bg-accent transition-colors"
-                >
-                  {q}
+                  {suggestion}
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${
-                  message.role === "user" ? "justify-end" : "justify-start"
-                }`}
+                className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
               >
                 <div
-                  className={`max-w-[90%] px-4 py-3 rounded-2xl text-sm ${
+                  className={cn(
+                    "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed",
                     message.role === "user"
                       ? "bg-foreground text-background"
-                      : "bg-muted text-foreground"
-                  }`}
+                      : message.grounded === false
+                        ? "border border-border bg-muted/30 text-muted-foreground"
+                        : "bg-muted text-foreground",
+                  )}
                 >
-                  {message.content}
+                  {message.grounded === false && (
+                    <span className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <ShieldQuestion className="size-3" />
+                      no grounded answer
+                    </span>
+                  )}
+                  <p className="whitespace-pre-wrap">{message.content}</p>
+
+                  {message.citations && message.citations.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/60 pt-2">
+                      {message.citations.map((citation, index) => (
+                        <button
+                          key={`${citation.start}-${index}`}
+                          type="button"
+                          onClick={() => onSeek(citation.start)}
+                          title={citation.quote}
+                          className="rounded-md bg-background px-1.5 py-0.5 text-[11px] tabular-nums text-foreground underline decoration-border underline-offset-2 hover:bg-accent"
+                        >
+                          {formatTime(citation.start)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
-            {isLoading && (
+            {loading && (
               <div className="flex justify-start">
-                <div className="bg-muted px-4 py-3 rounded-2xl">
+                <div className="rounded-2xl bg-muted px-3.5 py-2.5">
                   <Spinner className="size-4" />
                 </div>
               </div>
@@ -159,23 +172,28 @@ export function ChatTab({ questions }: ChatTabProps) {
         )}
       </div>
 
-      {/* Input Area */}
-      <form onSubmit={handleSubmit} className="pt-4 mt-auto border-t border-border">
-        <div className="flex items-center gap-2 bg-muted/50 rounded-full px-4 py-2">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void ask(input);
+        }}
+        className="mt-auto border-t border-border pt-3"
+      >
+        <div className="flex items-center gap-2 rounded-full bg-muted/50 px-3.5 py-1.5">
           <input
-            type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about the video..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-            disabled={isLoading}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Ask something the video might answer…"
+            className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+            disabled={loading}
           />
           <button
             type="submit"
-            disabled={!input.trim() || isLoading}
-            className="p-2 rounded-full bg-foreground text-background disabled:opacity-50 disabled:cursor-not-allowed hover:bg-foreground/90 transition-colors"
+            disabled={!input.trim() || loading}
+            className="rounded-full bg-foreground p-1.5 text-background transition disabled:opacity-40"
+            aria-label="Send question"
           >
-            <Send className="size-4" />
+            <Send className="size-3.5" />
           </button>
         </div>
       </form>

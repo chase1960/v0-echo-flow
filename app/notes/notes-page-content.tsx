@@ -1,308 +1,197 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Search, ArrowUpDown, Video, FileText, Trash2 } from "lucide-react";
-import { Note, VideoNoteGroup } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import type { Note, VideoNoteGroup } from "@/lib/types";
+import { formatTime, watchUrl } from "@/lib/youtube";
+import { readGroups, removeNote } from "@/lib/storage";
+import { Search, ArrowUpDown, FileText, Trash2 } from "lucide-react";
 
-type FilterType = "all" | "chat" | "transcript" | "takeaway" | "custom";
-
-// Mock data for demo - in production this would come from localStorage
-const mockVideoNotes: VideoNoteGroup[] = [
-  {
-    videoId: "abc123",
-    videoTitle: "Andrew Ng: Building Faster with AI",
-    channelName: "Y Combinator",
-    thumbnailUrl: "https://img.youtube.com/vi/abc123/mqdefault.jpg",
-    duration: 2637, // 43:57
-    notes: [
-      {
-        id: "1",
-        content: "AI can help startups move 10x faster by automating repetitive tasks",
-        timestamp: undefined,
-        createdAt: Date.now() - 1000 * 60 * 30,
-        type: "custom",
-      },
-      {
-        id: "2",
-        content: "Focus on building MVPs quickly and iterating based on user feedback",
-        timestamp: undefined,
-        createdAt: Date.now() - 1000 * 60 * 25,
-        type: "custom",
-      },
-      {
-        id: "3",
-        content: "The most important thing is to ship fast and learn from real users",
-        timestamp: 0,
-        createdAt: Date.now() - 1000 * 60 * 20,
-        type: "custom",
-      },
-    ],
-  },
-  {
-    videoId: "def456",
-    videoTitle: "How to Build a Successful SaaS Product",
-    channelName: "SaaStr",
-    thumbnailUrl: "https://img.youtube.com/vi/def456/mqdefault.jpg",
-    duration: 1845, // 30:45
-    notes: [
-      {
-        id: "4",
-        content: "Product-market fit is the most critical milestone for any startup",
-        timestamp: 125,
-        createdAt: Date.now() - 1000 * 60 * 60 * 24,
-        type: "chat",
-      },
-      {
-        id: "5",
-        content: "Customer feedback should drive your product roadmap",
-        timestamp: 340,
-        createdAt: Date.now() - 1000 * 60 * 60 * 24 - 1000 * 60 * 10,
-        type: "transcript",
-      },
-    ],
-  },
-];
-
-function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
-
-function formatTimestamp(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
+type FilterType = "all" | "custom" | "chat" | "transcript" | "takeaway";
 
 function formatDate(timestamp: number): string {
-  const date = new Date(timestamp);
-  return date.toLocaleDateString("en-US", {
+  return new Date(timestamp).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
   });
 }
 
+/**
+ * Notes page, reading the same store the player writes to.
+ *
+ * The old page rendered demo notes and then covered each thumbnail with an
+ * opaque overlay; it also read a key the player never wrote, so real notes
+ * seemed to vanish. This version shows the real store, says so when it is
+ * empty, and turns every timestamp into a jump back into the video.
+ */
 export function NotesPageContent() {
-  const [videoNotes, setVideoNotes] = useState<VideoNoteGroup[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
-  const [sortOrder, setSortOrder] = useState<"recent" | "oldest">("recent");
+  const [groups, setGroups] = useState<VideoNoteGroup[]>([]);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [sort, setSort] = useState<"recent" | "oldest">("recent");
 
   useEffect(() => {
-    // Try to load from localStorage first
-    const savedNotes = localStorage.getItem("notes");
-    if (savedNotes) {
-      try {
-        const parsed = JSON.parse(savedNotes);
-        // Convert to VideoNoteGroup format if needed
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setVideoNotes(parsed);
-        } else {
-          // Use mock data for demo
-          setVideoNotes(mockVideoNotes);
-        }
-      } catch {
-        setVideoNotes(mockVideoNotes);
-      }
-    } else {
-      setVideoNotes(mockVideoNotes);
-    }
+    setGroups(readGroups());
   }, []);
 
-  const totalNotes = useMemo(() => {
-    return videoNotes.reduce((acc, group) => acc + group.notes.length, 0);
-  }, [videoNotes]);
+  const total = useMemo(
+    () => groups.reduce((count, group) => count + group.notes.length, 0),
+    [groups],
+  );
 
-  const filteredVideoNotes = useMemo(() => {
-    return videoNotes
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return groups
       .map((group) => {
-        // Filter notes by type and search query
-        const filteredNotes = group.notes.filter((note) => {
-          const matchesFilter =
-            activeFilter === "all" || note.type === activeFilter;
-          const matchesSearch =
-            searchQuery === "" ||
-            note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            group.videoTitle.toLowerCase().includes(searchQuery.toLowerCase());
-          return matchesFilter && matchesSearch;
-        });
-
-        // Sort notes
-        const sortedNotes = [...filteredNotes].sort((a, b) => {
-          return sortOrder === "recent"
-            ? b.createdAt - a.createdAt
-            : a.createdAt - b.createdAt;
-        });
-
-        return { ...group, notes: sortedNotes };
+        const notes = group.notes
+          .filter((note) => filter === "all" || (note.type ?? "custom") === filter)
+          .filter(
+            (note) =>
+              !needle ||
+              note.content.toLowerCase().includes(needle) ||
+              group.videoTitle.toLowerCase().includes(needle),
+          )
+          .sort((left, right) =>
+            sort === "recent" ? right.createdAt - left.createdAt : left.createdAt - right.createdAt,
+          );
+        return { ...group, notes };
       })
       .filter((group) => group.notes.length > 0);
-  }, [videoNotes, activeFilter, searchQuery, sortOrder]);
+  }, [groups, query, filter, sort]);
 
-  const handleDeleteNote = (videoId: string, noteId: string) => {
-    setVideoNotes((prev) =>
-      prev
-        .map((group) => {
-          if (group.videoId === videoId) {
-            return {
-              ...group,
-              notes: group.notes.filter((note) => note.id !== noteId),
-            };
-          }
-          return group;
-        })
-        .filter((group) => group.notes.length > 0)
-    );
-  };
+  function remove(videoId: string, noteId: string) {
+    setGroups(removeNote(videoId, noteId));
+  }
 
   const filters: { label: string; value: FilterType }[] = [
     { label: "All", value: "all" },
-    { label: "Chat", value: "chat" },
-    { label: "Transcript", value: "transcript" },
-    { label: "Takeaways", value: "takeaway" },
+    { label: "Notes", value: "custom" },
+    { label: "From chat", value: "chat" },
+    { label: "From transcript", value: "transcript" },
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-6">
-      {/* Title */}
-      <h1 className="text-3xl md:text-4xl font-serif font-medium text-foreground mb-2">
-        My Notes
-      </h1>
-      <p className="text-muted-foreground mb-8">
-        {totalNotes} notes saved from your videos
+    <div className="mx-auto max-w-3xl px-4">
+      <h1 className="text-2xl font-medium tracking-tight">Notes</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {total} notes across {groups.length} videos
       </p>
 
-      {/* Search */}
-      <div className="relative mb-6">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
+      <div className="relative mt-6">
+        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
-          type="text"
-          placeholder="Search notes or videos..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full h-12 pl-12 pr-4 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search notes or videos…"
+          className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-foreground/20"
         />
       </div>
 
-      {/* Filters and Sort */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground mr-1">Filter:</span>
-          {filters.map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setActiveFilter(filter.value)}
-              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                activeFilter === filter.value
-                  ? "bg-foreground text-background"
-                  : "text-blue-500 hover:bg-accent"
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {filters.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => setFilter(item.value)}
+            className={
+              filter === item.value
+                ? "rounded-full bg-foreground px-3 py-1 text-xs text-background"
+                : "rounded-full px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            }
+          >
+            {item.label}
+          </button>
+        ))}
         <button
-          onClick={() =>
-            setSortOrder((prev) => (prev === "recent" ? "oldest" : "recent"))
-          }
-          className="flex items-center gap-2 px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-accent transition-colors"
+          type="button"
+          onClick={() => setSort((value) => (value === "recent" ? "oldest" : "recent"))}
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-accent"
         >
-          <ArrowUpDown className="size-4" />
-          {sortOrder === "recent" ? "Most Recent" : "Oldest First"}
+          <ArrowUpDown className="size-3.5" />
+          {sort === "recent" ? "Newest first" : "Oldest first"}
         </button>
       </div>
 
-      {/* Video Groups */}
-      {filteredVideoNotes.length === 0 ? (
-        <div className="text-center py-16">
-          <FileText className="size-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">No notes found</p>
+      {filtered.length === 0 ? (
+        <div className="py-16 text-center">
+          <FileText className="mx-auto mb-3 size-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            {total === 0
+              ? "No notes yet. Open a video, take one from a moment, and it will show up here."
+              : "Nothing matches this filter."}
+          </p>
+          {total === 0 && (
+            <Link href="/" className="mt-3 inline-block text-sm underline underline-offset-2">
+              Find a video
+            </Link>
+          )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {filteredVideoNotes.map((group) => (
-            <div
-              key={group.videoId}
-              className="border border-border rounded-xl overflow-hidden"
-            >
-              {/* Video Header */}
-              <div className="p-4 flex items-start gap-4 border-b border-border/50">
-                <div className="relative w-28 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                  <Image
-                    src={group.thumbnailUrl}
-                    alt={group.videoTitle}
-                    fill
-                    className="object-cover"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                    <Video className="size-6 text-muted-foreground" />
-                  </div>
+        <div className="mt-6 space-y-4">
+          {filtered.map((group) => (
+            <section key={group.videoId} className="overflow-hidden rounded-xl border border-border">
+              <header className="flex items-center gap-3 border-b border-border/60 p-3">
+                <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md bg-muted">
+                  {group.thumbnailUrl && (
+                    <Image
+                      src={group.thumbnailUrl}
+                      alt=""
+                      fill
+                      sizes="80px"
+                      className="object-cover"
+                    />
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-foreground line-clamp-1">
-                    {group.videoTitle}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {group.channelName}
+                <div className="min-w-0 flex-1">
+                  <h2 className="line-clamp-1 text-sm font-medium">{group.videoTitle}</h2>
+                  <p className="text-[11px] text-muted-foreground">
+                    {group.notes.length} notes
+                    {group.duration > 0 && ` · ${formatTime(group.duration)}`}
                   </p>
-                  <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Video className="size-3.5" />
-                      {formatDuration(group.duration)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <FileText className="size-3.5" />
-                      {group.notes.length} notes
-                    </span>
-                  </div>
                 </div>
-              </div>
+                <Link
+                  href={`/video?url=${encodeURIComponent(watchUrl(group.videoId))}`}
+                  className="shrink-0 text-[11px] underline decoration-border underline-offset-2 hover:text-foreground"
+                >
+                  Open
+                </Link>
+              </header>
 
-              {/* Notes List */}
-              <div className="divide-y divide-border/50">
-                {group.notes.map((note) => (
-                  <div
-                    key={note.id}
-                    className="p-4 hover:bg-accent/30 transition-colors group"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="px-2 py-0.5 text-xs font-medium uppercase bg-muted rounded">
-                        {note.type || "custom"}
-                      </span>
-                      {note.timestamp !== undefined && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatTimestamp(note.timestamp)}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleDeleteNote(group.videoId, note.id)}
-                        className="ml-auto opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all"
-                        title="Delete note"
+              <ul className="divide-y divide-border/60">
+                {group.notes.map((note: Note) => (
+                  <li key={note.id} className="group flex gap-2 p-3 transition-colors hover:bg-muted/25">
+                    {typeof note.at === "number" ? (
+                      <Link
+                        href={`/video?url=${encodeURIComponent(watchUrl(group.videoId))}&t=${Math.floor(note.at)}`}
+                        className="h-fit shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] tabular-nums hover:bg-accent"
                       >
-                        <Trash2 className="size-4" />
-                      </button>
+                        {formatTime(note.at)}
+                      </Link>
+                    ) : (
+                      <span className="h-fit shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        general
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="whitespace-pre-wrap text-[13px] leading-relaxed">{note.content}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {(note.type ?? "custom") === "custom" ? "note" : note.type} · {formatDate(note.createdAt)}
+                      </p>
                     </div>
-                    <div className="flex items-start">
-                      <div className="w-0.5 h-full bg-muted-foreground/30 mr-3 self-stretch" />
-                      <p className="text-foreground flex-1">{note.content}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2 ml-3.5">
-                      {formatDate(note.createdAt)}
-                    </p>
-                  </div>
+                    <button
+                      type="button"
+                      onClick={() => remove(group.videoId, note.id)}
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                      aria-label="Delete note"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </li>
                 ))}
-              </div>
-            </div>
+              </ul>
+            </section>
           ))}
         </div>
       )}

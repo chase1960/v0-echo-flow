@@ -1,194 +1,132 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Sparkles, Send, Loader2, Video, MessageSquare, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-interface ApiResponse {
+interface AssistantResponse {
   result?: string;
+  via?: string;
   error?: string;
-  [key: string]: unknown;
 }
 
+/**
+ * Server-proxied assistant.
+ *
+ * The previous version called a third party agent from the browser with a
+ * NEXT_PUBLIC_ token, which any visitor could read out of the JS bundle. The
+ * credential now lives only on the server, so this page can be shipped publicly.
+ */
 export function AIAssistantContent() {
   const [videoUrl, setVideoUrl] = useState("");
-  const [userQuery, setUserQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [via, setVia] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleAnalyze = async () => {
+  async function submit() {
     if (!videoUrl.trim()) {
-      setError("Please enter a video URL");
+      setError("Paste a video link first.");
       return;
     }
-
-    setIsLoading(true);
+    setLoading(true);
     setError(null);
     setResult(null);
+    setVia(null);
 
     try {
-      const response = await fetch("https://psj946698b.coze.site/run", {
+      const response = await fetch("/api/assistant", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_COZE_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          video_url: videoUrl.trim(),
-          subtitle: {},
-          video_title: {},
-          video_author: {},
-          video_cover: {},
-          user_query: userQuery.trim() || "帮我总结这个视频",
-        }),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ videoUrl: videoUrl.trim(), question: question.trim() }),
       });
-
+      const data = (await response.json()) as AssistantResponse;
       if (!response.ok) {
-        throw new Error(`Request failed: ${response.status}`);
+        setError(data.error ?? `Request failed: ${response.status}`);
+        return;
       }
-
-      const data: ApiResponse = await response.json();
-
-      // Try to parse result if it's a JSON string
-      let parsedResult = data.result || JSON.stringify(data, null, 2);
-      
-      if (typeof parsedResult === "string") {
-        try {
-          const parsed = JSON.parse(parsedResult);
-          parsedResult = typeof parsed === "object" ? JSON.stringify(parsed, null, 2) : parsed;
-        } catch {
-          // Not JSON, use as-is
-        }
-      }
-
-      setResult(parsedResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setResult(data.result ?? "(empty response)");
+      setVia(data.via ?? null);
+    } catch {
+      setError("Network request failed.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  };
+  }
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-12">
-      {/* Header */}
-      <div className="text-center mb-10">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-100 to-orange-100 mb-4">
-          <Sparkles className="size-8 text-rose-500" />
-        </div>
-        <h1 className="font-serif text-3xl md:text-4xl text-foreground mb-2">
-          AI Video Assistant
-        </h1>
-        <p className="text-muted-foreground">
-          Enter a Bilibili video link to get AI-powered summaries and answers
+    <main className="mx-auto max-w-3xl px-4 py-12">
+      <div className="mb-8">
+        <h1 className="text-2xl font-medium tracking-tight">Video brief</h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+          Ask for a summary of a YouTube lecture. The brief is assembled from verified moments,
+          so every line still points at a timestamp you can watch.
         </p>
       </div>
 
-      {/* Input Card */}
-      <Card className="mb-6 shadow-lg border-0 bg-card/80 backdrop-blur">
-        <CardContent className="p-6 space-y-4">
-          {/* Video URL Input */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Video className="size-4 text-muted-foreground" />
-              Video URL
+      <Card className="mb-6">
+        <CardContent className="space-y-4 p-5">
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+              <Video className="size-3.5 text-muted-foreground" />
+              Video link
             </label>
             <input
-              type="text"
               value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="Paste Bilibili video link here..."
-              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 transition-all"
+              onChange={(event) => setVideoUrl(event.target.value)}
+              placeholder="https://www.youtube.com/watch?v=…"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-foreground/20"
             />
           </div>
 
-          {/* Question Input */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <MessageSquare className="size-4 text-muted-foreground" />
-              Your Question
-              <span className="text-xs text-muted-foreground">(Optional)</span>
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+              <MessageSquare className="size-3.5 text-muted-foreground" />
+              What do you want from it?
+              <span className="text-[11px] text-muted-foreground">optional</span>
             </label>
             <textarea
-              value={userQuery}
-              onChange={(e) => setUserQuery(e.target.value)}
-              placeholder="Ask a question about the video, or leave empty for a summary..."
-              rows={3}
-              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 transition-all resize-none"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              rows={2}
+              placeholder="e.g. only the parts about pricing, or a list of claims I should check"
+              className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-foreground/20"
             />
           </div>
 
-          {/* Submit Button */}
-          <Button
-            onClick={handleAnalyze}
-            disabled={isLoading || !videoUrl.trim()}
-            className="w-full py-6 rounded-xl bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-600 hover:to-orange-500 text-white font-medium text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
+          <Button onClick={() => void submit()} disabled={loading || !videoUrl.trim()} className="w-full">
+            {loading ? (
               <>
-                <Loader2 className="size-5 mr-2 animate-spin" />
-                Analyzing...
+                <Loader2 className="mr-1.5 size-4 animate-spin" /> Reading the video…
               </>
             ) : (
               <>
-                <Send className="size-5 mr-2" />
-                Start Analysis
+                <Send className="mr-1.5 size-4" /> Get the brief
               </>
             )}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Error Display */}
       {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="p-4 flex items-start gap-3">
-            <AlertCircle className="size-5 text-red-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-red-800">Error</p>
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Result Display */}
-      {result && (
-        <Card className="shadow-xl border-0 bg-gradient-to-br from-white to-rose-50/30 overflow-hidden">
-          <div className="px-6 py-4 border-b border-rose-100 bg-gradient-to-r from-rose-50 to-orange-50">
-            <h2 className="font-medium text-foreground flex items-center gap-2">
-              <Sparkles className="size-4 text-rose-500" />
-              Analysis Result
-            </h2>
-          </div>
-          <CardContent className="p-6">
-            <div className="prose prose-sm max-w-none max-h-[500px] overflow-y-auto">
-              <div className="whitespace-pre-wrap text-foreground leading-relaxed">
-                {result}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tips */}
-      {!result && !error && !isLoading && (
-        <div className="text-center text-sm text-muted-foreground mt-8">
-          <p>Tip: You can ask questions like:</p>
-          <div className="flex flex-wrap justify-center gap-2 mt-3">
-            {["What are the key points?", "Summarize in bullet points", "What is the main conclusion?"].map((tip) => (
-              <button
-                key={tip}
-                onClick={() => setUserQuery(tip)}
-                className="px-3 py-1.5 rounded-full bg-muted hover:bg-accent text-foreground text-xs transition-colors"
-              >
-                {tip}
-              </button>
-            ))}
-          </div>
+        <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-600" />
+          <p className="text-sm leading-relaxed text-red-800">{error}</p>
         </div>
+      )}
+
+      {result && (
+        <Card>
+          <CardContent className="p-5">
+            <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Sparkles className="size-3.5" />
+              <span>{via === "coze" ? "External agent" : "Anchors"}</span>
+            </div>
+            <p className="whitespace-pre-wrap text-[13px] leading-relaxed">{result}</p>
+          </CardContent>
+        </Card>
       )}
     </main>
   );

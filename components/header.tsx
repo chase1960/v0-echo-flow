@@ -35,17 +35,13 @@ export function Header() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">Account</p>
+                <p className="text-sm font-medium">This browser</p>
                 <p className="text-xs text-muted-foreground">
-                  fan200428@gmail.com
+                  Notes and history stay on this device. No account yet.
                 </p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Sparkles className="size-4" />
-              <span>Upgrade Plan</span>
-            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/videos">
                 <Video className="size-4" />
@@ -58,14 +54,11 @@ export function Header() {
                 <span>Notes</span>
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="size-4" />
-              <span>Settings</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut className="size-4" />
-              <span>Sign out</span>
+            <DropdownMenuItem asChild>
+              <Link href="/ai-assistant">
+                <Sparkles className="size-4" />
+                <span>Video brief</span>
+              </Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
