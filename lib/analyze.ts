@@ -201,7 +201,18 @@ ${segment.text}`,
     temperature: 0.1,
     maxTokens: 700,
   });
-  return payload.anchors;
+  // The loose zod schema (enums/lengths use .catch, arrays use .default) yields values the
+  // compiler widens to unknown; normalise to AnchorDraft so downstream code stays typed.
+  return (payload.anchors ?? []).map((draft) => ({
+    title: draft.title,
+    why: draft.why,
+    kind: (draft.kind ?? "claim") as AnchorKind,
+    start: Number(draft.start),
+    end: Number(draft.end),
+    quote: draft.quote,
+    visual: typeof draft.visual === "string" ? draft.visual : "",
+    confidence: typeof draft.confidence === "number" ? draft.confidence : 0.6,
+  }));
 }
 
 function toAnchor(draft: AnchorDraft, segment: EventSegment, index: number): Anchor {

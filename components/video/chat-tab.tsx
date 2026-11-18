@@ -69,13 +69,14 @@ export function ChatTab({ videoId, videoUrl, anchors, onSeek }: ChatTabProps) {
           grounded: data.grounded ?? false,
         },
       ]);
-      if (data.nearby && data.nearby.length > 0) {
+      const nearby = data.nearby ?? [];
+      if (nearby.length > 0) {
         setMessages((prev) => [
           ...prev,
           {
             id: `n-${Date.now()}`,
             role: "assistant",
-            content: `Nearest real topics: ${data.nearby.join(" · ")}`,
+            content: `Nearest real topics: ${nearby.join(" · ")}`,
             grounded: true,
           },
         ]);

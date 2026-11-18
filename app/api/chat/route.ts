@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       signal: request.signal,
     });
 
-    const used = answer.usedSegmentIds
+    const used = (answer.usedSegmentIds ?? [])
       .map((id) => bundle!.segments.find((segment) => segment.id === id))
       .filter((segment): segment is EventSegment => Boolean(segment));
 
