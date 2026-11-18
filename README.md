@@ -15,11 +15,68 @@ paste a YouTube link
         └─ the learner can start on minute ten while minute ninety is still being read
 ```
 
-## Why anchors instead of a summary
+## Why this product exists
 
-A summary compresses a two hour video into text and, in doing so, destroys the only coordinate
-the learner can act on: time. The compression is not the problem — the loss of a way back is.
-So the unit of value here is an anchor:
+Every tool built for long video assumes the cost is *watching*. It is not. Anyone who has sat
+through a ninety minute lecture knows where the cost actually lands:
+
+| the real cost | what it looks like | what a summary does about it |
+| --- | --- | --- |
+| **relocating** | you remember "there was a counterexample in the pricing part", then scrub the timeline for six minutes and give up | nothing. the summary tells you the counterexample existed, not which second it is in |
+| **verifying** | the note says "the speaker argues X is a trap" — is that a paraphrase, or their words? | nothing. prose has no handle to pull on |
+| **waiting** | a two hour video takes a minute to process, and for that minute the product is a spinner | makes it worse: one long opaque job instead of useful output early |
+
+A summary compresses two hours into text and, in doing so, destroys the only coordinate a learner
+can act on: **time**. The compression is not the failure. The loss of a way back is. That is the
+whole reason this product exists — not to hand you a shorter version of the video, but to hand you
+a route into it. Concretely: the question "where was that thing?" should cost one click, and the
+click should land on a second you can trust, with the speaker's own sentence already visible.
+
+So the product is deliberately not a summarizer with timestamps bolted on. The summary is a
+by-product. The thing being built is a **map of checkable moments**.
+
+## What it is actually competing on
+
+Calling a model is not a competitive advantage — anyone can do it in an afternoon, and most video
+tools do exactly that: transcribe, chunk, summarise, add timestamps, ship. EchoFlow competes on the
+four things that shape does structurally cannot deliver.
+
+**1. Verifiability over fluency.** Every anchor carries a `quote` that must appear *verbatim* in the
+captions. The pipeline re-checks each quote against the transcript and **drops the anchor** when it
+does not match; timestamps are computed from the event's own boundaries, so the model is never
+allowed to invent a time. The claim being sold is not "our summary is good" but "you can check it
+yourself in two seconds".
+
+**2. Refusal as a feature.** Questions are answered by retrieving over events with a grounding
+threshold. Below it, the product says it cannot find it and shows the nearest real topics instead of
+composing a plausible sentence. A tool that guesses when it does not know is unusable for study,
+because you cannot tell the guesses from the facts.
+
+**3. Time-to-first-value.** The pipeline is an async generator behind SSE: stages and anchors
+stream as they verify. You can be reading minute ten while minute ninety is still being processed.
+Nothing blocks behind a single long job.
+
+**4. Deployable, boring infrastructure.** No new dependency, no lockfile churn, secrets only
+server-side, optional Upstash over REST rather than an SDK. A good idea that cannot be built on a
+free host, or that leaks its key into the browser bundle, is not a product.
+
+The durable part is not the model call — it is the layer around it:
+
+- the **anchor contract** (`start/end`, verbatim `quote`, `why`, `confidence`, `dependsOn`),
+- the **verification gate** that makes the contract true rather than aspirational,
+- the **event-level index** that makes refusal and citation possible,
+- and the artefacts that accumulate per video: analyses, notes pinned to timestamps, dependency
+  links. Cheaper to keep using than to re-derive elsewhere — that, not the prompt, is the moat.
+
+**Who it is for:** people who study from video and need to cite it — students re-watching lectures,
+engineers mining conference talks, anyone who has to point a colleague at "this part, minute 42".
+**Who it is not for:** anyone who wants five bullets and will never go back to the source. For them
+a summary is genuinely better, and this will feel like extra work.
+
+## The unit of value: an anchor
+
+If the map is the product, the anchor is its cell. Every field below exists to answer exactly one
+doubt a learner has while standing in front of a two hour video:
 
 | field        | why it exists                                                        |
 | ------------ | -------------------------------------------------------------------- |
