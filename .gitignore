@@ -14,3 +14,7 @@ next.user-config.*
 node_modules
 .next/
 .DS_Store
+
+# npm artefact — pnpm-lock.yaml is the source of truth, and a stray
+# package-lock.json makes Turbopack pick the wrong workspace root
+package-lock.json
